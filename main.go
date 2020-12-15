@@ -10,15 +10,20 @@ const PreviewHeader = "X-PREVIEW"
 type addedPreviewKey struct{}
 
 func PreviewMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := r.Header.Get(PreviewHeader)
-		if h == "" {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			h := r.Header.Get(PreviewHeader)
+			if h == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			r = r.WithContext(context.WithValue(
+				r.Context(),
+				addedPreviewKey{},
+				h,
+			))
 			next.ServeHTTP(w, r)
-			return
-		}
-		r = r.WithContext(context.WithValue(r.Context(), addedPreviewKey{}, h))
-		next.ServeHTTP(w, r)
-	})
+		})
 }
 
 type PreviewTransport struct {
@@ -32,7 +37,9 @@ func (t *PreviewTransport) base() http.RoundTripper {
 	return http.DefaultTransport
 }
 
-func (t *PreviewTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *PreviewTransport) RoundTrip(req *http.Request) (
+	*http.Response, error) {
+
 	tr := t.base()
 	r := req.Clone(req.Context())
 	v, ok := r.Context().Value(addedPreviewKey{}).(string)
